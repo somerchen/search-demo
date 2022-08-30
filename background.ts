@@ -10,14 +10,51 @@ const setChromeContextMenu = (type) => {
   });
 }
 
+const setChromeProxySetting = (url, proxy) => {
+  console.log(url, proxy)
+  const proxyConfig = {
+    mode: "pac_script",
+    pacScript: {
+      data: `
+        const direct = 'DIRECT';
+        const proxy = 'PROXY ${proxy}';
+        const ruleUrl = '${url}';
+        function FindProxyForURL(url, host) {
+          if (url.includes(ruleUrl)) return proxy;
+          return direct;
+        }
+      `
+    }
+  };
+  chrome.proxy.settings.set(
+    { value: proxyConfig, scope: 'regular' },
+    () => {
+      console.log('reset setting finished')
+    }
+  );
+}
+
 chrome.storage.sync.get('searchType', (items) => {
   const { searchType = defaultSearchType } = items;
   setChromeContextMenu(searchType)
 })
 
-chrome.storage.onChanged.addListener(function ({ searchType: { newValue, oldValue } }) {
-  if (newValue !== oldValue) {
+chrome.storage.sync.get('proxyRule', (items) => {
+  const proxyRule = JSON.parse(items.proxyRule);
+  const { url, proxy } = proxyRule;
+  setChromeProxySetting(url, proxy)
+})
+
+chrome.storage.onChanged.addListener(function ({ searchType = {}, proxyRule = {} }) {
+  const { newValue, oldValue } = searchType;
+  if (newValue && newValue !== oldValue) {
     setChromeContextMenu(newValue)
+  }
+
+  const { newValue: proxyNewRule, oldValue: proxyOldRule } = proxyRule;
+  if (proxyNewRule !== proxyOldRule) {
+    const { url, proxy } = JSON.parse(proxyNewRule);
+    setChromeProxySetting(url, proxy);
   }
 })
 
@@ -30,3 +67,20 @@ chrome.contextMenus.onClicked.addListener(function (info, tabs) {
 })
 
 export default {}
+
+// chrome.webRequest.onBeforeRequest.addListener(
+//   (details) => {
+//     const { url } = details;
+//     console.log(details);
+//     // const rule = rules.find(rule => url.startsWith(rule.url));
+//     if (url.includes('api')) {
+//       return {
+//         redirectUrl: url.replace('http://192.168.6.150:8000', 'http://192.168.6.150:7002')
+//       };
+//     }
+//   },
+//   {
+//     urls: ['<all_urls>'],
+//   },
+//   ['blocking']
+// )
